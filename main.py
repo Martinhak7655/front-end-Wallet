@@ -36,10 +36,7 @@ class SignUp(BaseModel):
     username: str
     password: str
     mail: str
-    img: str
-
-class UserFound(BaseModel):
-    username: str    
+    img: str   
 
 class Balance(BaseModel):
     password: str
@@ -73,12 +70,29 @@ def signin(user: SignIn):
 
 @app.post("/api/create-user")
 def signup(user: SignUp):
-    insert = '''
-        INSERT INTO users (username, password, mail, img) VALUES (%s, %s, %s, %s);
+    select = '''
+        SELECT * FROM users WHERE password = (%s);
     '''
-    cursor.execute(insert, (user.username, user.password, user.mail, user.img,))
+    cursor.execute(select, (user.password,))
     connection.commit()
-    return {"succes": True, "message": "Your page has benn saved"}
+    user_password = cursor.fetchone()
+    if user_password:
+        return {"succes": False, "message": "by this password one lives"}
+    select = '''
+        SELECT * FROM users WHERE mail = (%s);
+    '''
+    cursor.execute(select, (user.mail,))
+    connection.commit()
+    user_mail = cursor.fetchone()
+    if user_mail:
+        return {"succes": False, "message": "by this email one lives"}
+    else:
+        insert = '''
+            INSERT INTO users (username, password, mail, img) VALUES (%s, %s, %s, %s);
+        '''
+        cursor.execute(insert, (user.username, user.password, user.mail, user.img,))
+        connection.commit()
+        return {"succes": True, "message": "Your page has benn saved"}
 
 @app.post("/api/balance")
 def balance(balance: Balance):
@@ -91,7 +105,7 @@ def balance(balance: Balance):
     if user:
         return {"succes": True, "balance": user[4]}
 
-@app.post("/api/cashin")
+@app.put("/api/cashin")
 def cashin(balance: CashIn):
     select = '''
         SELECT * FROM users WHERE password = (%s);
@@ -99,6 +113,8 @@ def cashin(balance: CashIn):
     cursor.execute(select, (balance.password,))
     connection.commit()
     user = cursor.fetchone()
+    if balance.balance < 100 or balance.balance == 0:
+        return {"succes": False, "message": "you are not allowed to add this much"}
     update = '''
         UPDATE users SET balance = (%s) WHERE password = (%s);
     '''
@@ -106,14 +122,16 @@ def cashin(balance: CashIn):
     connection.commit()
     return {"succes": True, "message": "Procces completed succesfully"}
     
-@app.post("/api/cashout")
-def cashin(balance: CashOut):
+@app.put("/api/cashout")
+def cashout(balance: CashOut):
     select = '''
         SELECT * FROM users WHERE password = (%s);
     '''
     cursor.execute(select, (balance.password,))
     connection.commit()
     user = cursor.fetchone()
+    if balance.balance == 0 or balance.balance < 100 or user[4] == 0:
+        return {"succes": False, "message": "you are not allowed to withdraw this much"}
     update = '''
         UPDATE users SET balance = (%s) WHERE password = (%s);
     '''
@@ -121,12 +139,12 @@ def cashin(balance: CashOut):
     connection.commit()
     return {"succes": True, "message": "Procces completed succesfully"}
     
-@app.post("/api/user")
-def user(user: UserFound):
+@app.get("/api/user/{username}")
+def user(username: str):
     select = '''
         SELECT * FROM users WHERE username = (%s);
     '''
-    cursor.execute(select, (user.username,))
+    cursor.execute(select, (username,))
     connection.commit()
     user = cursor.fetchall()
     if user:
@@ -140,7 +158,7 @@ def user(user: UserFound):
             user_list.append(user_data)
         return {"succes": True, "users": user_list}
 
-@app.post("/api/transfer")
+@app.put("/api/transfer")
 def transfer(balance: Transfer):
     select = '''
         SELECT * FROM users WHERE password = (%s);
@@ -154,7 +172,8 @@ def transfer(balance: Transfer):
     cursor.execute(select2, (balance.password2,))
     connection.commit()
     user2 = cursor.fetchone()
-
+    if balance.balance < 100 or user2[4] == 0:
+        return {"succes": False, "message": "you are not allowed to transfer this much"}
     update1 = '''
         UPDATE users SET balance = (%s) WHERE password = (%s);
     '''
